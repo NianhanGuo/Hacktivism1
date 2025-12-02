@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
+using System.Collections.Generic;
 
 public class SurveillanceManager : MonoBehaviour
 {
@@ -13,6 +14,34 @@ public class SurveillanceManager : MonoBehaviour
     public string preferredDeviceName = ""; // leave empty for default
     private WebCamTexture webcamTexture;
     private bool surveillanceStarted = false;
+
+    [Header("Red Filter Settings")]
+    [Tooltip("Maximum alpha of the red overlay on each camera popup.")]
+    public float maxRedAlpha = 0.5f;
+
+    [Tooltip("Number of open popups required to reach maxRedAlpha and show hacked warning.")]
+    public int popupsForMaxRed = 50;
+
+    [Header("Hacked Warning Window")]
+    [Tooltip("Panel that asks: 'Is your computer hacked? Need help?' with Yes/No buttons.")]
+    public GameObject hackedWarningWindow;
+
+    [Tooltip("If true, the hacked warning will only appear once per session.")]
+    public bool showHackedWindowOnce = true;
+
+    private bool hackedWindowShown = false;
+
+    // track all active camera popups so we can update their red overlay
+    private readonly List<CameraPopup> activePopups = new List<CameraPopup>();
+
+    private void Start()
+    {
+        // Make sure warning window starts hidden
+        if (hackedWarningWindow != null)
+        {
+            hackedWarningWindow.SetActive(false);
+        }
+    }
 
     private void OnDestroy()
     {
@@ -95,13 +124,13 @@ public class SurveillanceManager : MonoBehaviour
         }
 
         Rect rect = popupParent.rect;
+        float margin = 60f;
 
         for (int i = 0; i < count; i++)
         {
             CameraPopup popup = Instantiate(popupPrefab, popupParent);
             RectTransform rt = popup.GetComponent<RectTransform>();
 
-            float margin = 60f;
             float x = Random.Range(-rect.width / 2f + margin, rect.width / 2f - margin);
             float y = Random.Range(-rect.height / 2f + margin, rect.height / 2f - margin);
             rt.anchoredPosition = new Vector2(x, y);
@@ -113,9 +142,19 @@ public class SurveillanceManager : MonoBehaviour
             {
                 img.texture = webcamTexture;
             }
+
+            // track it for red overlay + hacked window logic
+            if (!activePopups.Contains(popup))
+            {
+                activePopups.Add(popup);
+            }
         }
 
-        Debug.Log("[Surveillance] Spawned " + count + " camera popup(s).");
+        // after spawning, update red intensity + hacked window
+        UpdatePopupRedFilters();
+        CheckHackedWindowCondition();
+
+        Debug.Log("[Surveillance] Spawned " + count + " camera popup(s). Active: " + activePopups.Count);
     }
 
     // Called by CameraPopup when user clicks X
@@ -123,10 +162,98 @@ public class SurveillanceManager : MonoBehaviour
     {
         if (popup != null)
         {
+            // remove from our list before destroying
+            activePopups.Remove(popup);
             Destroy(popup.gameObject);
         }
 
         Debug.Log("[Surveillance] Popup closed. Spawning 2 new popups.");
+
+        // Spawn 2 new popups as before
         SpawnCameraPopups(2);
+    }
+
+    /// <summary>
+    /// Recalculates the red overlay alpha based on how many popups are open,
+    /// and applies it to every popup.
+    /// </summary>
+    private void UpdatePopupRedFilters()
+    {
+        int count = activePopups.Count;
+        if (count <= 0)
+            return;
+
+        float normalized = 0f;
+
+        if (popupsForMaxRed > 0)
+        {
+            normalized = Mathf.Clamp01((float)count / popupsForMaxRed);
+        }
+
+        float targetAlpha = maxRedAlpha * normalized;
+
+        foreach (var popup in activePopups)
+        {
+            if (popup != null)
+            {
+                popup.SetRedFilterAlpha(targetAlpha);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Shows the hacked warning window once the number of open popups
+    /// reaches or exceeds popupsForMaxRed (default 50).
+    /// </summary>
+    private void CheckHackedWindowCondition()
+    {
+        if (hackedWarningWindow == null)
+            return;
+
+        if (popupsForMaxRed <= 0)
+            return;
+
+        if (activePopups.Count >= popupsForMaxRed)
+        {
+            if (!showHackedWindowOnce || !hackedWindowShown)
+            {
+                hackedWarningWindow.SetActive(true);
+                hackedWindowShown = true;
+                Debug.Log("[Surveillance] Hacked warning window shown.");
+            }
+        }
+    }
+
+    // =======================
+    // Hacked window buttons
+    // =======================
+
+    /// <summary>
+    /// Called by the YES button on the hacked warning window.
+    /// You can extend this (e.g., open a help panel, quit game, etc.).
+    /// Right now it just closes the warning.
+    /// </summary>
+    public void OnHackedYesClicked()
+    {
+        if (hackedWarningWindow != null)
+        {
+            hackedWarningWindow.SetActive(false);
+        }
+
+        Debug.Log("[Surveillance] User clicked YES on hacked warning.");
+    }
+
+    /// <summary>
+    /// Called by the NO button on the hacked warning window.
+    /// Currently just closes the warning.
+    /// </summary>
+    public void OnHackedNoClicked()
+    {
+        if (hackedWarningWindow != null)
+        {
+            hackedWarningWindow.SetActive(false);
+        }
+
+        Debug.Log("[Surveillance] User clicked NO on hacked warning.");
     }
 }
