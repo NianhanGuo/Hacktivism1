@@ -11,6 +11,10 @@ public class InterfaceController : MonoBehaviour
     [Header("Log System")]
     public LogManager logManager;
 
+    [Header("Action Log Panel")]
+    [Tooltip("Optional: console-style panel that records player actions.")]
+    public ActionLogPanel actionLogPanel;
+
     [Header("Main Window Popup")]
     public GameObject mainWindow;        // drag your "main window" panel here
     public float windowDelay = 1.5f;     // delay before first popup
@@ -43,6 +47,12 @@ public class InterfaceController : MonoBehaviour
         {
             mainWindow.SetActive(false);
             StartCoroutine(ShowMainWindowAfterDelay());
+        }
+
+        // Optional: initial line in the console
+        if (actionLogPanel != null)
+        {
+            actionLogPanel.AddLog("// system ready: waiting_for_user_input();");
         }
     }
 
@@ -129,6 +139,11 @@ public class InterfaceController : MonoBehaviour
             logManager.SpawnRain("log: userClicked(\"ClearHistory\")");
         }
 
+        if (actionLogPanel != null)
+        {
+            actionLogPanel.AddLog("> userClicked(\"ClearHistory\");");
+        }
+
         HideWindowPop();
 
         if (surveillanceManager != null)
@@ -146,6 +161,11 @@ public class InterfaceController : MonoBehaviour
             logManager.SpawnRain("log: userClicked(\"TurnOffTracking\")");
         }
 
+        if (actionLogPanel != null)
+        {
+            actionLogPanel.AddLog("> userClicked(\"TurnOffTracking\");");
+        }
+
         HideWindowPop();
 
         if (surveillanceManager != null)
@@ -161,6 +181,11 @@ public class InterfaceController : MonoBehaviour
         if (logManager != null)
         {
             logManager.SpawnRain("log: userClicked(\"OptOutOfDataCollection\")");
+        }
+
+        if (actionLogPanel != null)
+        {
+            actionLogPanel.AddLog("> userClicked(\"OptOutOfDataCollection\");");
         }
 
         HideWindowPop();
