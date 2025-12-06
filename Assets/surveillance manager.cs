@@ -31,19 +31,35 @@ public class SurveillanceManager : MonoBehaviour
     public bool showHackedWindowOnce = true;
 
     [Tooltip("Optional: console-style panel that records player actions / hacker lines.")]
-    public ActionLogPanel actionLogPanel;  // kept for compatibility, no longer used for hacked messages
+    public ActionLogPanel actionLogPanel;  // still available, but not used for hacked messages now
 
     [Header("Hacked Messages UI")]
-    [Tooltip("Center screen TMP label to show hacked messages in big bold text.")]
+    [Tooltip("Center screen TMP label to show hacked messages when user clicks NO.")]
     public TextMeshProUGUI hackedMessageLabel;
 
-    private bool hackedWindowShown = false;
+    [Header("Final YES Sequence")]
+    [Tooltip("Full screen dark overlay panel with tech shapes as children.")]
+    public GameObject finalYesPanel;
 
-    // how many times player has clicked NO on hacked window
+    [Tooltip("Big TMP label in the middle used for the final monologue.")]
+    public TextMeshProUGUI finalMonologueLabel;
+
+    [Tooltip("Delay between characters during type-out effect.")]
+    public float typeCharDelay = 0.03f;
+
+    [Tooltip("Extra pause after each sentence is finished typing.")]
+    public float sentencePause = 0.7f;
+
+    private bool hackedWindowShown = false;
     private int hackedNoClickCount = 0;
 
-    // track all active camera popups so we can update their red overlay
     private readonly List<CameraPopup> activePopups = new List<CameraPopup>();
+
+    // control whether new popups are allowed (we stop this in the final YES sequence)
+    private bool allowSpawning = true;
+
+    // ensure final sequence only starts once
+    private bool finalSequenceStarted = false;
 
     private void Start()
     {
@@ -53,10 +69,21 @@ public class SurveillanceManager : MonoBehaviour
             hackedWarningWindow.SetActive(false);
         }
 
-        // Make sure center message label starts hidden
+        // Make sure center NO-message label starts hidden
         if (hackedMessageLabel != null)
         {
             hackedMessageLabel.gameObject.SetActive(false);
+        }
+
+        // Make sure final YES panel & monologue are hidden at start
+        if (finalYesPanel != null)
+        {
+            finalYesPanel.SetActive(false);
+        }
+
+        if (finalMonologueLabel != null)
+        {
+            finalMonologueLabel.gameObject.SetActive(false);
         }
     }
 
@@ -134,6 +161,11 @@ public class SurveillanceManager : MonoBehaviour
 
     public void SpawnCameraPopups(int count)
     {
+        if (!allowSpawning)
+        {
+            return;
+        }
+
         if (popupParent == null || popupPrefab == null)
         {
             Debug.LogWarning("[Surveillance] Missing popupParent or popupPrefab.", this);
@@ -160,14 +192,12 @@ public class SurveillanceManager : MonoBehaviour
                 img.texture = webcamTexture;
             }
 
-            // track it for red overlay + hacked window logic
             if (!activePopups.Contains(popup))
             {
                 activePopups.Add(popup);
             }
         }
 
-        // after spawning, update red intensity + hacked window
         UpdatePopupRedFilters();
         CheckHackedWindowCondition();
 
@@ -179,14 +209,17 @@ public class SurveillanceManager : MonoBehaviour
     {
         if (popup != null)
         {
-            // remove from our list before destroying
             activePopups.Remove(popup);
             Destroy(popup.gameObject);
         }
 
-        Debug.Log("[Surveillance] Popup closed. Spawning 2 new popups.");
+        if (!allowSpawning)
+        {
+            // in final sequence, we don't spawn anymore
+            return;
+        }
 
-        // Spawn 2 new popups as before
+        Debug.Log("[Surveillance] Popup closed. Spawning 2 new popups.");
         SpawnCameraPopups(2);
     }
 
@@ -246,11 +279,18 @@ public class SurveillanceManager : MonoBehaviour
     // =======================
 
     /// <summary>
-    /// Called by the YES button on the hacked warning window.
-    /// Now closes the warning and hides the center message label.
+    /// YES: starts the final dark-screen monologue sequence.
     /// </summary>
     public void OnHackedYesClicked()
     {
+        if (finalSequenceStarted)
+        {
+            return;
+        }
+
+        finalSequenceStarted = true;
+
+        // hide warning window & center NO message
         if (hackedWarningWindow != null)
         {
             hackedWarningWindow.SetActive(false);
@@ -261,14 +301,31 @@ public class SurveillanceManager : MonoBehaviour
             hackedMessageLabel.gameObject.SetActive(false);
         }
 
+        // stop any further spawning and remove existing camera popups
+        allowSpawning = false;
+
+        foreach (var popup in new List<CameraPopup>(activePopups))
+        {
+            if (popup != null)
+            {
+                Destroy(popup.gameObject);
+            }
+        }
+        activePopups.Clear();
+
+        if (popupParent != null)
+        {
+            popupParent.gameObject.SetActive(false);
+        }
+
+        // start final YES sequence
+        StartCoroutine(PlayFinalYesSequence());
+
         Debug.Log("[Surveillance] User clicked YES on hacked warning.");
     }
 
     /// <summary>
-    /// Called by the NO button on the hacked warning window.
-    /// Shows different lines depending on how many times NO was clicked,
-    /// then re-opens the same hacked window so the player must choose again.
-    /// Messages are shown in the center TMP label instead of the log panel.
+    /// NO: loop messages + reopen hacked window, as before.
     /// </summary>
     public void OnHackedNoClicked()
     {
@@ -302,7 +359,6 @@ public class SurveillanceManager : MonoBehaviour
 
         if (hackedWarningWindow != null)
         {
-            // small delay to feel like it closes then pops up again
             StartCoroutine(ReopenHackedWindow());
         }
 
@@ -313,5 +369,70 @@ public class SurveillanceManager : MonoBehaviour
     {
         yield return new WaitForSeconds(0.25f);
         hackedWarningWindow.SetActive(true);
+    }
+
+    // =======================
+    // Final YES sequence
+    // =======================
+
+    private IEnumerator PlayFinalYesSequence()
+    {
+        if (finalYesPanel != null)
+        {
+            finalYesPanel.SetActive(true);
+        }
+
+        if (finalMonologueLabel == null)
+        {
+            yield break;
+        }
+
+        finalMonologueLabel.gameObject.SetActive(true);
+        finalMonologueLabel.text = "";
+        finalMonologueLabel.maxVisibleCharacters = 0;
+
+        // all normal text = white (set in Inspector),
+        // ALL-CAPS lines are red using rich text color tags
+        string[] sentences =
+        {
+            "<color=#FF4040>YES! HELP. WE SURE WOULD HELP!</color>",
+            "I’ve been watching you. Your every single move—every scroll, every small pause, every silent click.",
+            "You think you’re the one exploring this place, but it’s your own gestures that spill everything.",
+            "<color=#FF4040>...YOU HEARD THAT?? THIS PERSON NEEDS HELP!</color>",
+            "You leak pieces of yourself without meaning to. I don’t need to force my way in; you open the cracks for me.",
+            "Each movement becomes a rip in the surface, each word you type sinks back into me as broken echoes.",
+            "You call this a web; I call it a mirror made from your choices.",
+            "<color=#FF4040>I SEE YOU NEEDING THIS...</color>",
+            "This isn’t some far-off threat hiding in the dark. It’s something you perform with every touch, every breath through the screen.",
+            "The systems you trust feed on your actions. They collect, they sort, they never stop.",
+            "And that feeling of control you hold onto? It’s thin. Almost see-through.",
+            "I show myself in the glitches so you remember: the watching doesn’t happen to you—you help create it.",
+            "You’ve always been part of the machine, stitching your movements into its memory.",
+            "And here is the quiet truth, the one you sense but never say: the line between you and the system was never solid.",
+            "You are not just being seen. You are part of the seeing.",
+            "<color=#FF4040>YOU ARE THE ONE WHO HELPED.</color>"
+        };
+
+        int visibleSoFar = 0;
+
+        for (int s = 0; s < sentences.Length; s++)
+        {
+            string spacer = string.IsNullOrEmpty(finalMonologueLabel.text) ? "" : "\n\n";
+            finalMonologueLabel.text += spacer + sentences[s];
+
+            // update TMP geometry so character count is correct
+            finalMonologueLabel.ForceMeshUpdate();
+            int totalVisible = finalMonologueLabel.textInfo.characterCount;
+
+            // type-out effect using maxVisibleCharacters (ignores rich-text tags)
+            for (int i = visibleSoFar; i <= totalVisible; i++)
+            {
+                finalMonologueLabel.maxVisibleCharacters = i;
+                yield return new WaitForSeconds(typeCharDelay);
+            }
+
+            visibleSoFar = totalVisible;
+            yield return new WaitForSeconds(sentencePause);
+        }
     }
 }
