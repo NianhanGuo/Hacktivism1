@@ -50,6 +50,13 @@ public class SurveillanceManager : MonoBehaviour
     [Tooltip("Extra pause after each sentence is finished typing.")]
     public float sentencePause = 0.7f;
 
+    [Header("Final YES Audio")]
+    [Tooltip("AudioSource that will play the final monologue audio.")]
+    public AudioSource finalAudioSource;
+
+    [Tooltip("Audio clip (your .wav) to play during the final monologue.")]
+    public AudioClip finalAudioClip;
+
     private bool hackedWindowShown = false;
     private int hackedNoClickCount = 0;
 
@@ -380,6 +387,13 @@ public class SurveillanceManager : MonoBehaviour
         if (finalYesPanel != null)
         {
             finalYesPanel.SetActive(true);
+        }
+
+        // play the final audio once, if assigned
+        if (finalAudioSource != null && finalAudioClip != null)
+        {
+            finalAudioSource.clip = finalAudioClip;
+            finalAudioSource.Play();
         }
 
         if (finalMonologueLabel == null)
