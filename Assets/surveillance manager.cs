@@ -26,10 +26,16 @@ public class SurveillanceManager : MonoBehaviour
     [Tooltip("Panel that asks: 'Is your computer hacked? Need help?' with Yes/No buttons.")]
     public GameObject hackedWarningWindow;
 
-    [Tooltip("If true, the hacked warning will only appear once per session.")]
+    [Tooltip("If true, the hacked warning will only appear once per session when threshold is reached.")]
     public bool showHackedWindowOnce = true;
 
+    [Tooltip("Optional: console-style panel that records player actions / hacker lines.")]
+    public ActionLogPanel actionLogPanel;
+
     private bool hackedWindowShown = false;
+
+    // how many times player has clicked NO on hacked window
+    private int hackedNoClickCount = 0;
 
     // track all active camera popups so we can update their red overlay
     private readonly List<CameraPopup> activePopups = new List<CameraPopup>();
@@ -240,20 +246,60 @@ public class SurveillanceManager : MonoBehaviour
             hackedWarningWindow.SetActive(false);
         }
 
+        if (actionLogPanel != null)
+        {
+            actionLogPanel.AddLog("// user accepted help.");
+        }
+
         Debug.Log("[Surveillance] User clicked YES on hacked warning.");
     }
 
     /// <summary>
     /// Called by the NO button on the hacked warning window.
-    /// Currently just closes the warning.
+    /// Shows different lines depending on how many times NO was clicked,
+    /// then re-opens the same hacked window so the player must choose again.
     /// </summary>
     public void OnHackedNoClicked()
     {
+        hackedNoClickCount++;
+
         if (hackedWarningWindow != null)
         {
             hackedWarningWindow.SetActive(false);
         }
 
-        Debug.Log("[Surveillance] User clicked NO on hacked warning.");
+        if (actionLogPanel != null)
+        {
+            string msg;
+
+            if (hackedNoClickCount == 1)
+            {
+                msg = "\"Are you sure? Choose again.\"";
+            }
+            else if (hackedNoClickCount == 2)
+            {
+                msg = "\"You must need our help. Let us help you.\"";
+            }
+            else
+            {
+                msg = "\"Just say you need help. You need help.\"";
+            }
+
+            actionLogPanel.AddLog(msg);
+        }
+
+        if (hackedWarningWindow != null)
+        {
+            // small delay to feel like it closes then pops up again
+            StartCoroutine(ReopenHackedWindow());
+        }
+
+        Debug.Log("[Surveillance] User clicked NO on hacked warning. Count: " + hackedNoClickCount);
+    }
+
+    private IEnumerator ReopenHackedWindow()
+    {
+        yield return new WaitForSeconds(0.25f);
+        hackedWarningWindow.SetActive(true);
     }
 }
