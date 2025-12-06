@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 
 public class SurveillanceManager : MonoBehaviour
 {
@@ -30,7 +31,11 @@ public class SurveillanceManager : MonoBehaviour
     public bool showHackedWindowOnce = true;
 
     [Tooltip("Optional: console-style panel that records player actions / hacker lines.")]
-    public ActionLogPanel actionLogPanel;
+    public ActionLogPanel actionLogPanel;  // kept for compatibility, no longer used for hacked messages
+
+    [Header("Hacked Messages UI")]
+    [Tooltip("Center screen TMP label to show hacked messages in big bold text.")]
+    public TextMeshProUGUI hackedMessageLabel;
 
     private bool hackedWindowShown = false;
 
@@ -46,6 +51,12 @@ public class SurveillanceManager : MonoBehaviour
         if (hackedWarningWindow != null)
         {
             hackedWarningWindow.SetActive(false);
+        }
+
+        // Make sure center message label starts hidden
+        if (hackedMessageLabel != null)
+        {
+            hackedMessageLabel.gameObject.SetActive(false);
         }
     }
 
@@ -236,8 +247,7 @@ public class SurveillanceManager : MonoBehaviour
 
     /// <summary>
     /// Called by the YES button on the hacked warning window.
-    /// You can extend this (e.g., open a help panel, quit game, etc.).
-    /// Right now it just closes the warning.
+    /// Now closes the warning and hides the center message label.
     /// </summary>
     public void OnHackedYesClicked()
     {
@@ -246,9 +256,9 @@ public class SurveillanceManager : MonoBehaviour
             hackedWarningWindow.SetActive(false);
         }
 
-        if (actionLogPanel != null)
+        if (hackedMessageLabel != null)
         {
-            actionLogPanel.AddLog("// user accepted help.");
+            hackedMessageLabel.gameObject.SetActive(false);
         }
 
         Debug.Log("[Surveillance] User clicked YES on hacked warning.");
@@ -258,6 +268,7 @@ public class SurveillanceManager : MonoBehaviour
     /// Called by the NO button on the hacked warning window.
     /// Shows different lines depending on how many times NO was clicked,
     /// then re-opens the same hacked window so the player must choose again.
+    /// Messages are shown in the center TMP label instead of the log panel.
     /// </summary>
     public void OnHackedNoClicked()
     {
@@ -268,24 +279,25 @@ public class SurveillanceManager : MonoBehaviour
             hackedWarningWindow.SetActive(false);
         }
 
-        if (actionLogPanel != null)
+        string msg;
+
+        if (hackedNoClickCount == 1)
         {
-            string msg;
+            msg = "Are you sure? Choose again.";
+        }
+        else if (hackedNoClickCount == 2)
+        {
+            msg = "You must need our help. Let us help you.";
+        }
+        else
+        {
+            msg = "Just say you need help. You need help.";
+        }
 
-            if (hackedNoClickCount == 1)
-            {
-                msg = "\"Are you sure? Choose again.\"";
-            }
-            else if (hackedNoClickCount == 2)
-            {
-                msg = "\"You must need our help. Let us help you.\"";
-            }
-            else
-            {
-                msg = "\"Just say you need help. You need help.\"";
-            }
-
-            actionLogPanel.AddLog(msg);
+        if (hackedMessageLabel != null)
+        {
+            hackedMessageLabel.text = msg;
+            hackedMessageLabel.gameObject.SetActive(true);
         }
 
         if (hackedWarningWindow != null)
